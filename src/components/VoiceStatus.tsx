@@ -26,6 +26,8 @@ function mapStatusKey(
       return 'speechUnavailable';
     case 'finding-position':
       return 'findingPosition';
+    case 'scrolling':
+      return 'scrolling';
     case 'listening':
       return 'listening';
     case 'paused':

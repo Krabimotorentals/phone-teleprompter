@@ -3,7 +3,6 @@ import { en } from '../i18n/en';
 import { loadScript, loadSettings, saveScript, saveSettings } from '../lib/storage';
 import { getScriptTypographyStyle } from '../lib/textAppearance';
 import { APP_VERSION } from '../lib/appVersion';
-import { markVoicePrimedFromGesture } from '../lib/voiceGesture';
 import type { AppSettings } from '../lib/types';
 import { LanguageSelector, SettingsPanel } from './SettingsPanel';
 import styles from './Editor.module.css';
@@ -32,10 +31,6 @@ export function Editor({ onStart }: Props) {
     }
     setError(null);
     // Prime mic in the same tap as Start (browser user-gesture rules).
-    markVoicePrimedFromGesture();
-    if (navigator.mediaDevices?.getUserMedia) {
-      void navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
-    }
     onStart(script, settings);
   };
 

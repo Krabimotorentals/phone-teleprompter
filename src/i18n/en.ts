@@ -5,7 +5,7 @@ export const en = {
   clearScript: 'Clear Script',
   startTeleprompter: 'Start Teleprompter',
   startTeleprompterHint:
-    'Voice mode listens and scrolls as you read the script aloud (Chrome recommended).',
+    'Auto-scroll at a natural speaking pace (~140 words/min). Adjust speed in Settings or while reading.',
   language: 'Language',
   languageEn: 'English',
   languageRu: 'Русский',
@@ -38,7 +38,12 @@ export const en = {
   speechErrorNetwork:
     'Speech recognition needs an internet connection (Chrome uses Google speech services).',
   speechErrorGeneric: 'Speech recognition error. Tap Listen to try again.',
-  manualSpeed: 'Manual scroll speed',
+  scrollWpm: 'Scroll speed (words per minute)',
+  scrollWpmHint: 'Average speech is about 130–150 words per minute.',
+  scrollSlower: 'Slower',
+  scrollFaster: 'Faster',
+  autoScrolling: 'Auto-scrolling',
+  scrollPaused: 'Scroll paused',
   backToEditor: 'Editor',
   restart: 'Restart',
   pause: 'Pause',
@@ -51,6 +56,7 @@ export const en = {
   scrollDown: 'Down',
   voiceStatus: {
     idle: 'Ready',
+    scrolling: 'Auto-scrolling',
     listening: 'Listening',
     paused: 'Paused',
     micUnavailable: 'Microphone unavailable',

@@ -109,6 +109,13 @@
   height: 1.25rem;
 }
 
+.wpmHint {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.72;
+  line-height: 1.35;
+}
+
 .fontSelect {
   width: 100%;
   min-height: 48px;

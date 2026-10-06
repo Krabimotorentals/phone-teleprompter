@@ -14,14 +14,22 @@ import {
   getScriptTypographyStyle,
   isRotatedSideways,
 } from '../lib/textAppearance';
-import { consumeVoicePrimedFromGesture } from '../lib/voiceGesture';
 import type { AppSettings, TeleprompterMode, VoiceStatusType } from '../lib/types';
 import {
   matchSpokenWords,
   tokenizeScript,
   TranscriptBuffer,
 } from '../matching/scriptMatcher';
-import { ManualScroller, scrollToTokenElement } from '../scroll/scrollController';
+import {
+  getReadingLineY,
+  ManualScroller,
+  scrollToTokenElement,
+} from '../scroll/scrollController';
+import {
+  MAX_WORDS_PER_MINUTE,
+  MIN_WORDS_PER_MINUTE,
+  wordsPerMinuteToPixelsPerSecond,
+} from '../scroll/scrollSpeed';
 import {
   isSpeechRecognitionSupported,
   VoiceRecognizer,
@@ -36,6 +44,7 @@ interface Props {
 }
 
 const CONTROLS_HIDE_MS = 4000;
+const WPM_STEP = 5;
 
 export function Teleprompter({ script, settings, onExit }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -47,21 +56,19 @@ export function Teleprompter({ script, settings, onExit }: Props) {
   const hideTimerRef = useRef<number | null>(null);
   const listeningRef = useRef(false);
   const applyMatchRef = useRef<(text?: string) => void>(() => {});
+  const manualRunningRef = useRef(false);
 
   const tokens = useMemo(() => tokenizeScript(script), [script]);
   const speechSupported = isSpeechRecognitionSupported();
 
-  const [mode, setMode] = useState<TeleprompterMode>(() =>
-    speechSupported ? 'voice' : 'manual',
-  );
-  const [voiceStatus, setVoiceStatus] = useState<VoiceStatusType>(() =>
-    speechSupported ? 'idle' : 'speech-unavailable',
-  );
+  const [mode, setMode] = useState<TeleprompterMode>('manual');
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatusType>('idle');
   const [currentTokenIndex, setCurrentTokenIndex] = useState(0);
   const [highlightFromIndex, setHighlightFromIndex] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [listening, setListening] = useState(false);
   const [manualRunning, setManualRunning] = useState(false);
+  const [sessionWpm, setSessionWpm] = useState(settings.scrollWordsPerMinute);
   const [awaitingListenTap, setAwaitingListenTap] = useState(false);
   const [lastHeard, setLastHeard] = useState('');
   const [speechHint, setSpeechHint] = useState<string | null>(null);
@@ -93,6 +100,47 @@ export function Teleprompter({ script, settings, onExit }: Props) {
     if (el) scrollToTokenElement(container, el, smooth);
   }, []);
 
+  const syncHighlightFromScroll = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const guideY = getReadingLineY(container);
+    const containerRect = container.getBoundingClientRect();
+    const wordEls = container.querySelectorAll<HTMLElement>('[data-token-index]');
+    let bestIdx = tokenIndexRef.current;
+    let bestDist = Infinity;
+    wordEls.forEach((el) => {
+      const rect = el.getBoundingClientRect();
+      const centerY = rect.top - containerRect.top + rect.height / 2;
+      const dist = Math.abs(centerY - guideY);
+      const idx = Number(el.dataset.tokenIndex);
+      if (!Number.isNaN(idx) && dist < bestDist) {
+        bestDist = dist;
+        bestIdx = idx;
+      }
+    });
+    if (bestIdx !== tokenIndexRef.current) {
+      tokenIndexRef.current = bestIdx;
+      setCurrentTokenIndex(bestIdx);
+      setHighlightFromIndex(Math.max(0, bestIdx - 2));
+    }
+  }, []);
+
+  const pixelsPerSecond = useCallback(() => {
+    const width = containerRef.current?.clientWidth ?? window.innerWidth;
+    return wordsPerMinuteToPixelsPerSecond(
+      sessionWpm,
+      settings.fontSize,
+      settings.lineHeight,
+      settings.textWidthPercent,
+      width,
+    );
+  }, [
+    sessionWpm,
+    settings.fontSize,
+    settings.lineHeight,
+    settings.textWidthPercent,
+  ]);
+
   const applyMatch = useCallback(
     (heardText?: string) => {
       if (heardText !== undefined) {
@@ -121,25 +169,30 @@ export function Teleprompter({ script, settings, onExit }: Props) {
     applyMatchRef.current = applyMatch;
   }, [applyMatch]);
 
+  const stopManual = useCallback(() => {
+    manualScroller.current.stop();
+    manualRunningRef.current = false;
+    setManualRunning(false);
+    if (mode === 'manual') setVoiceStatus('paused');
+  }, [mode]);
+
   const stopVoice = useCallback(() => {
     recognizerRef.current?.stop();
     recognizerRef.current = null;
     listeningRef.current = false;
     setListening(false);
-    setVoiceStatus('paused');
-  }, []);
+    if (mode === 'voice') setVoiceStatus('paused');
+  }, [mode]);
 
   const startVoice = useCallback((): boolean => {
     if (!speechSupported) {
       setVoiceStatus('speech-unavailable');
-      setMode('manual');
-      setAwaitingListenTap(false);
+      setSpeechHint(en.speechUnavailableHint);
       return false;
     }
 
-    if (recognizerRef.current) {
-      stopVoice();
-    }
+    stopManual();
+    if (recognizerRef.current) stopVoice();
     setSpeechHint(null);
     const rec = new VoiceRecognizer(settings.speechLanguage);
     recognizerRef.current = rec;
@@ -163,7 +216,6 @@ export function Teleprompter({ script, settings, onExit }: Props) {
         if (err === 'not-allowed') {
           setVoiceStatus('mic-unavailable');
           setSpeechHint(en.micDeniedHint);
-          setMode('manual');
           setAwaitingListenTap(true);
           stopVoice();
           return;
@@ -187,31 +239,52 @@ export function Teleprompter({ script, settings, onExit }: Props) {
     if (!started) {
       setVoiceStatus('speech-unavailable');
       setSpeechHint(en.speechUnavailableHint);
-      setMode('manual');
       setAwaitingListenTap(true);
       return false;
     }
-
+    setMode('voice');
     return true;
-  }, [settings.speechLanguage, speechSupported, stopVoice]);
-
-  const stopManual = useCallback(() => {
-    manualScroller.current.stop();
-    setManualRunning(false);
-  }, []);
+  }, [settings.speechLanguage, speechSupported, stopManual, stopVoice]);
 
   const startManual = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
+    stopVoice();
     stopManual();
     manualScroller.current.start(
       container,
-      settings.manualScrollSpeed,
-      showControls,
+      pixelsPerSecond(),
+      () => {
+        showControls();
+        syncHighlightFromScroll();
+      },
     );
+    manualRunningRef.current = true;
     setManualRunning(true);
-    setVoiceStatus('paused');
-  }, [settings.manualScrollSpeed, showControls, stopManual]);
+    setMode('manual');
+    setVoiceStatus('scrolling');
+  }, [pixelsPerSecond, showControls, stopManual, stopVoice, syncHighlightFromScroll]);
+
+  const adjustWpm = useCallback(
+    (delta: number) => {
+      setSessionWpm((wpm) => {
+        const next = Math.min(
+          MAX_WORDS_PER_MINUTE,
+          Math.max(MIN_WORDS_PER_MINUTE, wpm + delta),
+        );
+        return next;
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (manualRunningRef.current) {
+      startManual();
+    }
+    // Re-start scroller when speed changes mid-session
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionWpm]);
 
   const restart = useCallback(() => {
     tokenIndexRef.current = 0;
@@ -219,7 +292,8 @@ export function Teleprompter({ script, settings, onExit }: Props) {
     setHighlightFromIndex(0);
     transcriptRef.current.reset();
     containerRef.current?.scrollTo({ top: 0, behavior: 'auto' });
-  }, []);
+    if (mode === 'manual') startManual();
+  }, [mode, startManual]);
 
   const stopTeleprompter = useCallback(() => {
     stopVoice();
@@ -230,15 +304,7 @@ export function Teleprompter({ script, settings, onExit }: Props) {
 
   useLayoutEffect(() => {
     void wakeLock.request();
-    if (mode === 'voice' && speechSupported) {
-      const primed = consumeVoicePrimedFromGesture();
-      if (primed) {
-        const started = startVoice();
-        if (!started) setAwaitingListenTap(true);
-      } else {
-        setAwaitingListenTap(true);
-      }
-    }
+    startManual();
   }, []);
 
   useEffect(() => {
@@ -347,7 +413,12 @@ export function Teleprompter({ script, settings, onExit }: Props) {
         className={`${styles.toolbar} ${controlsVisible ? styles.toolbarVisible : ''}`}
       >
         <VoiceStatus status={voiceStatus} />
-        {mode === 'voice' && (
+        {mode === 'manual' ? (
+          <p className={styles.heardHint}>
+            {manualRunning ? en.autoScrolling : en.scrollPaused} —{' '}
+            <strong>{sessionWpm} wpm</strong>
+          </p>
+        ) : (
           <p className={styles.heardHint}>
             {listening ? en.voiceFollowHint : en.tapToListenHint}
             {lastHeard ? ` Heard: “${lastHeard.trim()}”` : ''}
@@ -355,19 +426,7 @@ export function Teleprompter({ script, settings, onExit }: Props) {
         )}
 
         <div className={styles.toolbarRow}>
-          {mode === 'voice' ? (
-            <>
-              {!listening ? (
-                <button type="button" onClick={() => startVoice()}>
-                  {en.listen}
-                </button>
-              ) : (
-                <button type="button" onClick={stopVoice}>
-                  {en.pause}
-                </button>
-              )}
-            </>
-          ) : (
+          {mode === 'manual' ? (
             <>
               {!manualRunning ? (
                 <button type="button" onClick={startManual}>
@@ -375,6 +434,24 @@ export function Teleprompter({ script, settings, onExit }: Props) {
                 </button>
               ) : (
                 <button type="button" onClick={stopManual}>
+                  {en.pause}
+                </button>
+              )}
+              <button type="button" onClick={() => adjustWpm(-WPM_STEP)}>
+                {en.scrollSlower}
+              </button>
+              <button type="button" onClick={() => adjustWpm(WPM_STEP)}>
+                {en.scrollFaster}
+              </button>
+            </>
+          ) : (
+            <>
+              {!listening ? (
+                <button type="button" onClick={() => startVoice()}>
+                  {en.listen}
+                </button>
+              ) : (
+                <button type="button" onClick={stopVoice}>
                   {en.pause}
                 </button>
               )}
@@ -392,15 +469,15 @@ export function Teleprompter({ script, settings, onExit }: Props) {
             onClick={() => {
               if (mode === 'voice') {
                 stopVoice();
-                setMode('manual');
+                startManual();
               } else {
                 stopManual();
-                setMode('voice');
+                setAwaitingListenTap(true);
                 startVoice();
               }
             }}
           >
-            {mode === 'voice' ? en.manualMode : en.voiceMode}
+            {mode === 'manual' ? en.voiceMode : en.manualMode}
           </button>
           <button
             type="button"
@@ -428,12 +505,6 @@ export function Teleprompter({ script, settings, onExit }: Props) {
           </button>
         </div>
 
-        {!speechSupported && (
-          <p className={styles.hint}>{en.speechUnavailableHint}</p>
-        )}
-        {voiceStatus === 'mic-unavailable' && (
-          <p className={styles.hint}>{en.micDeniedHint}</p>
-        )}
         {speechHint && <p className={styles.hint}>{speechHint}</p>}
       </div>
 

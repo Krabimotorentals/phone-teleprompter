@@ -19,6 +19,7 @@ export type FontFamilyId =
 
 export type VoiceStatusType =
   | 'idle'
+  | 'scrolling'
   | 'listening'
   | 'paused'
   | 'mic-unavailable'
@@ -39,7 +40,8 @@ export interface AppSettings {
   fontFamily: FontFamilyId;
   mirror: boolean;
   textRotation: TextRotation;
-  manualScrollSpeed: number;
+  /** Auto-scroll speed in spoken words per minute. */
+  scrollWordsPerMinute: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -54,7 +56,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontFamily: 'system',
   mirror: false,
   textRotation: 0,
-  manualScrollSpeed: 40,
+  scrollWordsPerMinute: 140,
 };
 
 export interface ScriptToken {

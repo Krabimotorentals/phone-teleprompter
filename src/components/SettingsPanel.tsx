@@ -218,18 +218,20 @@ export function SettingsPanel({ settings, onChange }: Props) {
       </fieldset>
 
       <label className={styles.row}>
-        <span>{en.manualSpeed}</span>
+        <span>{en.scrollWpm}</span>
+        <p className={styles.wpmHint}>{en.scrollWpmHint}</p>
         <div className={styles.sliderRow}>
           <input
             type="range"
-            min={10}
-            max={120}
-            value={settings.manualScrollSpeed}
+            min={70}
+            max={220}
+            step={5}
+            value={settings.scrollWordsPerMinute}
             onChange={(e) =>
-              patch({ manualScrollSpeed: Number(e.target.value) })
+              patch({ scrollWordsPerMinute: Number(e.target.value) })
             }
           />
-          <output>{settings.manualScrollSpeed}</output>
+          <output>{settings.scrollWordsPerMinute} wpm</output>
         </div>
       </label>
     </section>
