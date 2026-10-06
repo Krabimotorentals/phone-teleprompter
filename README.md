@@ -32,6 +32,13 @@ npm run build
 npm run preview
 ```
 
+## Live deployment
+
+- **GitHub:** https://github.com/Krabimotorentals/phone-teleprompter
+- **Production (Vercel):** https://phone-teleprompter.vercel.app
+
+If the Vercel URL asks you to log in, turn off **Deployment Protection** for this project in the Vercel dashboard (Settings → Deployment Protection) so the teleprompter is public.
+
 ## Deploy to Vercel
 
 1. Push this repository to GitHub (or GitLab/Bitbucket).
