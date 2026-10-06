@@ -31,6 +31,7 @@ export interface AppSettings {
   speechLanguage: SpeechLanguage;
   fontSize: number;
   fontColor: string;
+  highlightColor: string;
   backgroundColor: string;
   lineHeight: number;
   textWidthPercent: number;
@@ -45,6 +46,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   speechLanguage: 'en-US',
   fontSize: 36,
   fontColor: '#ffffff',
+  highlightColor: '#ca8a04',
   backgroundColor: '#000000',
   lineHeight: 1.5,
   textWidthPercent: 90,
@@ -65,5 +67,6 @@ export interface ScriptToken {
 
 export interface MatchResult {
   tokenIndex: number;
+  highlightFrom: number;
   confidence: number;
 }

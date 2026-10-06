@@ -61,17 +61,22 @@ export class VoiceRecognizer {
     };
 
     this.recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         const text = result[0]?.transcript ?? '';
         if (result.isFinal) {
           this.callbacks?.onFinal(text);
-        } else {
-          interim += text;
         }
       }
-      if (interim) this.callbacks?.onInterim(interim);
+
+      // Full interim transcript (all non-final segments) for reliable matching.
+      let fullInterim = '';
+      for (let i = 0; i < event.results.length; i++) {
+        if (!event.results[i].isFinal) {
+          fullInterim += event.results[i][0]?.transcript ?? '';
+        }
+      }
+      this.callbacks?.onInterim(fullInterim);
     };
 
     this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {

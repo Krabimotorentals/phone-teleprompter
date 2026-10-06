@@ -1,7 +1,7 @@
 {
   "name": "phone-teleprompter",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Mobile voice-follow teleprompter PWA (English and Russian)",
   "type": "module",
   "scripts": {

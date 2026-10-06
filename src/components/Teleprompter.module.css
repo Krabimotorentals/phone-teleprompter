@@ -32,6 +32,7 @@
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  padding-bottom: 4.5rem;
 }
 
 .padTop {
@@ -81,15 +82,25 @@
 }
 
 .word {
-  opacity: 0.75;
+  opacity: 0.55;
+}
+
+.wordHighlighted {
+  opacity: 1;
+  border-radius: 4px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  padding: 0 0.08em;
 }
 
 .wordCurrent {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.08);
   border-radius: 4px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+  padding: 0 0.08em;
+  outline: 2px solid rgba(255, 255, 255, 0.45);
+  outline-offset: 2px;
 }
 
 .empty {
@@ -101,7 +112,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: 4.25rem;
   padding: 0.75rem max(0.75rem, env(safe-area-inset-right))
     max(0.75rem, env(safe-area-inset-bottom))
     max(0.75rem, env(safe-area-inset-left));
@@ -188,4 +199,31 @@
   font-size: 0.9rem;
   line-height: 1.45;
   opacity: 0.9;
+}
+
+.stopBar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  padding: 0.5rem max(0.75rem, env(safe-area-inset-right))
+    max(0.65rem, env(safe-area-inset-bottom))
+    max(0.75rem, env(safe-area-inset-left));
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.92) 25%);
+  pointer-events: none;
+}
+
+.stopTeleprompterBtn {
+  pointer-events: auto;
+  width: 100%;
+  min-height: 52px;
+  border: none;
+  border-radius: 12px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
 }

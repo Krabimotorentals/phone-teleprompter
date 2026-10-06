@@ -10,6 +10,7 @@ import orient from './TextOrientationPanel.module.css';
 import styles from './SettingsPanel.module.css';
 
 const FONT_PRESETS = ['#ffffff', '#ffff00', '#86efac', '#d1d5db'];
+const HIGHLIGHT_PRESETS = ['#ca8a04', '#2563eb', '#16a34a', '#db2777'];
 const BG_PRESETS = ['#000000', '#1f2937', '#ffffff', '#0f172a'];
 
 const ROTATION_OPTIONS: { value: TextRotation; label: string }[] = [
@@ -124,6 +125,27 @@ export function SettingsPanel({ settings, onChange }: Props) {
             type="color"
             value={settings.fontColor}
             onChange={(e) => patch({ fontColor: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div className={styles.row}>
+        <span>{en.highlightColor}</span>
+        <div className={styles.colorRow}>
+          {HIGHLIGHT_PRESETS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              className={styles.swatch}
+              style={{ background: c }}
+              aria-label={c}
+              onClick={() => patch({ highlightColor: c })}
+            />
+          ))}
+          <input
+            type="color"
+            value={settings.highlightColor}
+            onChange={(e) => patch({ highlightColor: e.target.value })}
           />
         </div>
       </div>

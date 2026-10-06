@@ -53,12 +53,6 @@ export function Editor({ onStart }: Props) {
         </span>
       </header>
 
-      <p className={styles.versionBanner}>
-        Version {APP_VERSION} — Settings includes <strong>Mirror &amp; rotate</strong>{' '}
-        (Normal / 90° right / 90° left / 180°) and <strong>Font type</strong>. If you
-        only see an old “Mirror text” checkbox, refresh or run{' '}
-        <code>npm run dev:fresh</code>.
-      </p>
 
       <label className={styles.scriptLabel} htmlFor="script-input">
         Script

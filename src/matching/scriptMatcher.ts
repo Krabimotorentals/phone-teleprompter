@@ -48,16 +48,42 @@ function wordSimilarity(a: string, b: string): number {
   for (let i = 0; i < minLen; i++) {
     if (a[i] === b[i]) matches++;
   }
-  // Simple edit-distance proxy for short recognition mistakes
   let dist = maxLen - matches;
   for (let i = minLen; i < a.length; i++) dist++;
   for (let i = minLen; i < b.length; i++) dist++;
   return 1 - dist / maxLen;
 }
 
-const MIN_WORD_SCORE = 0.65;
-const LOOK_AHEAD = 120;
+const MIN_WORD_SCORE = 0.55;
+const LOOK_AHEAD = 150;
 const MIN_ANCHOR_WORDS = 2;
+
+function clampHighlightFrom(from: number, to: number): number {
+  return Math.max(0, Math.min(from, to));
+}
+
+/** Match the last spoken word at the nearest token at/after `fromIndex`. */
+function matchLastWordForward(
+  scriptTokens: ScriptToken[],
+  lastWord: string,
+  fromIndex: number,
+): MatchResult | null {
+  const end = Math.min(
+    scriptTokens.length - 1,
+    fromIndex + LOOK_AHEAD,
+  );
+  for (let i = fromIndex; i <= end; i++) {
+    const sim = wordSimilarity(lastWord, scriptTokens[i].normalized);
+    if (sim >= MIN_WORD_SCORE) {
+      return {
+        tokenIndex: i,
+        highlightFrom: clampHighlightFrom(i - 1, i),
+        confidence: sim,
+      };
+    }
+  }
+  return null;
+}
 
 /**
  * Find the best forward position in the script that aligns with spoken words.
@@ -70,26 +96,26 @@ export function matchSpokenWords(
 ): MatchResult | null {
   if (!spokenWords.length || !scriptTokens.length) return null;
 
+  const tailWords = spokenWords.slice(-6);
   const startSearch = Math.max(0, lastKnownIndex);
   const endSearch = Math.min(
     scriptTokens.length - 1,
     startSearch + LOOK_AHEAD,
   );
-  const minAnchor =
-    lastKnownIndex <= 0 ? 1 : MIN_ANCHOR_WORDS;
+  const minAnchor = lastKnownIndex <= 0 ? 1 : MIN_ANCHOR_WORDS;
 
   let bestIndex = -1;
+  let bestFrom = 0;
   let bestScore = 0;
 
-  // Try aligning the tail of spoken words at each candidate script position
   for (let scriptPos = startSearch; scriptPos <= endSearch; scriptPos++) {
     let score = 0;
     let matched = 0;
-    for (let k = 0; k < spokenWords.length; k++) {
+    for (let k = 0; k < tailWords.length; k++) {
       const scriptIdx = scriptPos + k;
       if (scriptIdx >= scriptTokens.length) break;
       const sim = wordSimilarity(
-        spokenWords[k],
+        tailWords[k],
         scriptTokens[scriptIdx].normalized,
       );
       if (sim >= MIN_WORD_SCORE) {
@@ -99,14 +125,13 @@ export function matchSpokenWords(
     }
     if (matched < minAnchor) continue;
 
-    // Prefer matches closer to end of spoken phrase (most recent words)
-    const tailStart = Math.max(0, spokenWords.length - MIN_ANCHOR_WORDS);
+    const tailStart = Math.max(0, tailWords.length - MIN_ANCHOR_WORDS);
     let tailMatched = 0;
-    for (let k = tailStart; k < spokenWords.length; k++) {
+    for (let k = tailStart; k < tailWords.length; k++) {
       const scriptIdx = scriptPos + k;
       if (scriptIdx >= scriptTokens.length) break;
       if (
-        wordSimilarity(spokenWords[k], scriptTokens[scriptIdx].normalized) >=
+        wordSimilarity(tailWords[k], scriptTokens[scriptIdx].normalized) >=
         MIN_WORD_SCORE
       ) {
         tailMatched++;
@@ -114,26 +139,47 @@ export function matchSpokenWords(
     }
     if (tailMatched < 1) continue;
 
-    const normalizedScore = score / spokenWords.length + tailMatched * 0.15;
+    const normalizedScore = score / tailWords.length + tailMatched * 0.12;
     if (normalizedScore > bestScore) {
       bestScore = normalizedScore;
-      bestIndex = scriptPos + spokenWords.length - 1;
+      bestIndex = scriptPos + tailWords.length - 1;
+      bestFrom = scriptPos;
     }
   }
 
-  if (bestIndex < 0) return null;
+  if (bestIndex >= 0) {
+    const confidence = Math.min(1, bestScore);
+    const minConfidence = lastKnownIndex <= 0 ? 0.22 : 0.3;
+    if (confidence >= minConfidence) {
+      const clampedIndex =
+        lastKnownIndex > 0 && bestIndex < lastKnownIndex
+          ? lastKnownIndex
+          : bestIndex;
+      const clampedFrom =
+        lastKnownIndex > 0 && bestFrom < lastKnownIndex
+          ? lastKnownIndex
+          : bestFrom;
+      return {
+        tokenIndex: clampedIndex,
+        highlightFrom: clampHighlightFrom(clampedFrom, clampedIndex),
+        confidence,
+      };
+    }
+  }
 
-  const confidence = Math.min(1, bestScore / spokenWords.length);
-  const minConfidence = lastKnownIndex <= 0 ? 0.28 : 0.35;
-  if (confidence < minConfidence) return null;
+  const lastWord = tailWords[tailWords.length - 1];
+  if (lastWord) {
+    const fallback = matchLastWordForward(
+      scriptTokens,
+      lastWord,
+      startSearch,
+    );
+    if (fallback && fallback.tokenIndex >= lastKnownIndex) {
+      return fallback;
+    }
+  }
 
-  // Never move backward relative to last position (except restart at 0)
-  const clampedIndex =
-    lastKnownIndex > 0 && bestIndex < lastKnownIndex
-      ? lastKnownIndex
-      : bestIndex;
-
-  return { tokenIndex: clampedIndex, confidence };
+  return null;
 }
 
 /** Rolling buffer of recent final + interim words for matching. */
@@ -145,7 +191,7 @@ export class TranscriptBuffer {
     const words = tokenizeTranscript(text);
     if (words.length) this.finals.push(...words);
     this.interim = '';
-    const maxKeep = 24;
+    const maxKeep = 32;
     if (this.finals.length > maxKeep) {
       this.finals = this.finals.slice(-maxKeep);
     }
@@ -158,10 +204,9 @@ export class TranscriptBuffer {
   /** Words used for position matching (recent finals + interim). */
   getMatchWords(): string[] {
     const interimWords = tokenizeTranscript(this.interim);
-    const recentFinals = this.finals.slice(-12);
+    const recentFinals = this.finals.slice(-16);
     const combined = [...recentFinals, ...interimWords];
-    // Use last N words — most indicative of current read position
-    return combined.slice(-8);
+    return combined.slice(-10);
   }
 
   reset(): void {

@@ -2,6 +2,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -45,6 +46,7 @@ export function Teleprompter({ script, settings, onExit }: Props) {
   const tokenIndexRef = useRef(0);
   const hideTimerRef = useRef<number | null>(null);
   const listeningRef = useRef(false);
+  const applyMatchRef = useRef<(text?: string) => void>(() => {});
 
   const tokens = useMemo(() => tokenizeScript(script), [script]);
   const speechSupported = isSpeechRecognitionSupported();
@@ -56,12 +58,11 @@ export function Teleprompter({ script, settings, onExit }: Props) {
     speechSupported ? 'idle' : 'speech-unavailable',
   );
   const [currentTokenIndex, setCurrentTokenIndex] = useState(0);
+  const [highlightFromIndex, setHighlightFromIndex] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [listening, setListening] = useState(false);
   const [manualRunning, setManualRunning] = useState(false);
-  const [awaitingListenTap, setAwaitingListenTap] = useState(
-    () => speechSupported,
-  );
+  const [awaitingListenTap, setAwaitingListenTap] = useState(false);
   const [lastHeard, setLastHeard] = useState('');
   const [speechHint, setSpeechHint] = useState<string | null>(null);
 
@@ -92,22 +93,33 @@ export function Teleprompter({ script, settings, onExit }: Props) {
     if (el) scrollToTokenElement(container, el, smooth);
   }, []);
 
-  const applyMatch = useCallback(() => {
-    const words = transcriptRef.current.getMatchWords();
-    if (!words.length) return;
-    setVoiceStatus('finding-position');
-    const result = matchSpokenWords(tokens, words, tokenIndexRef.current);
-    if (!result) {
-      if (listeningRef.current) setVoiceStatus('listening');
-      return;
-    }
-    if (result.tokenIndex >= tokenIndexRef.current) {
-      tokenIndexRef.current = result.tokenIndex;
-      setCurrentTokenIndex(result.tokenIndex);
-      scrollToIndex(result.tokenIndex);
-    }
-    setVoiceStatus('listening');
-  }, [tokens, scrollToIndex]);
+  const applyMatch = useCallback(
+    (heardText?: string) => {
+      if (heardText !== undefined) {
+        setLastHeard(heardText);
+      }
+      const words = transcriptRef.current.getMatchWords();
+      if (!words.length) return;
+      setVoiceStatus('finding-position');
+      const result = matchSpokenWords(tokens, words, tokenIndexRef.current);
+      if (!result) {
+        if (listeningRef.current) setVoiceStatus('listening');
+        return;
+      }
+      if (result.tokenIndex >= tokenIndexRef.current) {
+        tokenIndexRef.current = result.tokenIndex;
+        setCurrentTokenIndex(result.tokenIndex);
+        setHighlightFromIndex(result.highlightFrom);
+        scrollToIndex(result.tokenIndex);
+      }
+      setVoiceStatus('listening');
+    },
+    [tokens, scrollToIndex],
+  );
+
+  useEffect(() => {
+    applyMatchRef.current = applyMatch;
+  }, [applyMatch]);
 
   const stopVoice = useCallback(() => {
     recognizerRef.current?.stop();
@@ -125,7 +137,9 @@ export function Teleprompter({ script, settings, onExit }: Props) {
       return false;
     }
 
-    stopVoice();
+    if (recognizerRef.current) {
+      stopVoice();
+    }
     setSpeechHint(null);
     const rec = new VoiceRecognizer(settings.speechLanguage);
     recognizerRef.current = rec;
@@ -137,14 +151,12 @@ export function Teleprompter({ script, settings, onExit }: Props) {
         setAwaitingListenTap(false);
       },
       onInterim: (text) => {
-        setLastHeard(text);
         transcriptRef.current.setInterim(text);
-        applyMatch();
+        applyMatchRef.current(text);
       },
       onFinal: (text) => {
-        setLastHeard(text);
         transcriptRef.current.pushFinal(text);
-        applyMatch();
+        applyMatchRef.current(text);
       },
       onError: (err) => {
         if (err === 'aborted' || err === 'no-speech') return;
@@ -159,7 +171,7 @@ export function Teleprompter({ script, settings, onExit }: Props) {
         if (err === 'network') {
           setSpeechHint(en.speechErrorNetwork);
         } else {
-          setSpeechHint(en.speechErrorGeneric);
+          setSpeechHint(`${en.speechErrorGeneric} (${err})`);
         }
         setVoiceStatus('paused');
         setAwaitingListenTap(true);
@@ -167,20 +179,21 @@ export function Teleprompter({ script, settings, onExit }: Props) {
       },
       onEnd: () => {
         if (recognizerRef.current === rec && listeningRef.current) {
-          setVoiceStatus('paused');
+          setVoiceStatus('listening');
         }
       },
     });
 
     if (!started) {
       setVoiceStatus('speech-unavailable');
+      setSpeechHint(en.speechUnavailableHint);
       setMode('manual');
-      setAwaitingListenTap(false);
+      setAwaitingListenTap(true);
       return false;
     }
 
     return true;
-  }, [applyMatch, settings.speechLanguage, speechSupported, stopVoice]);
+  }, [settings.speechLanguage, speechSupported, stopVoice]);
 
   const stopManual = useCallback(() => {
     manualScroller.current.stop();
@@ -203,19 +216,32 @@ export function Teleprompter({ script, settings, onExit }: Props) {
   const restart = useCallback(() => {
     tokenIndexRef.current = 0;
     setCurrentTokenIndex(0);
+    setHighlightFromIndex(0);
     transcriptRef.current.reset();
     containerRef.current?.scrollTo({ top: 0, behavior: 'auto' });
   }, []);
 
-  useEffect(() => {
+  const stopTeleprompter = useCallback(() => {
+    stopVoice();
+    stopManual();
+    void wakeLock.release();
+    onExit();
+  }, [onExit, stopManual, stopVoice, wakeLock]);
+
+  useLayoutEffect(() => {
     void wakeLock.request();
     if (mode === 'voice' && speechSupported) {
-      consumeVoicePrimedFromGesture();
-      const started = startVoice();
-      if (!started) setAwaitingListenTap(true);
-    } else {
-      setAwaitingListenTap(false);
+      const primed = consumeVoicePrimedFromGesture();
+      if (primed) {
+        const started = startVoice();
+        if (!started) setAwaitingListenTap(true);
+      } else {
+        setAwaitingListenTap(true);
+      }
     }
+  }, []);
+
+  useEffect(() => {
     return () => {
       stopVoice();
       stopManual();
@@ -236,14 +262,28 @@ export function Teleprompter({ script, settings, onExit }: Props) {
           <span key={`ws-${i}`}>{script.slice(lastEnd, t.startChar)}</span>,
         );
       }
-      const isCurrent =
-        i === currentTokenIndex ||
-        (i >= currentTokenIndex - 2 && i <= currentTokenIndex);
+      const inHighlight =
+        i >= highlightFromIndex && i <= currentTokenIndex;
+      const isCurrent = i === currentTokenIndex;
       parts.push(
         <span
           key={`t-${i}`}
           data-token-index={i}
-          className={isCurrent ? styles.wordCurrent : styles.word}
+          className={
+            isCurrent
+              ? styles.wordCurrent
+              : inHighlight
+                ? styles.wordHighlighted
+                : styles.word
+          }
+          style={
+            inHighlight
+              ? {
+                  backgroundColor: settings.highlightColor,
+                  color: settings.fontColor,
+                }
+              : { color: settings.fontColor }
+          }
         >
           {t.raw}
         </span>,
@@ -256,7 +296,10 @@ export function Teleprompter({ script, settings, onExit }: Props) {
     return parts;
   };
 
-  const textStyle = getScriptTypographyStyle(settings);
+  const textStyle = {
+    ...getScriptTypographyStyle(settings),
+    color: settings.fontColor,
+  };
   const sideways = isRotatedSideways(settings.textRotation);
   const showReadingGuide = settings.textRotation === 0;
 
@@ -267,7 +310,7 @@ export function Teleprompter({ script, settings, onExit }: Props) {
       style={{ backgroundColor: settings.backgroundColor }}
       onPointerDown={showControls}
     >
-      {awaitingListenTap && mode === 'voice' && (
+      {awaitingListenTap && mode === 'voice' && !listening && (
         <div className={styles.listenOverlay}>
           <button
             type="button"
@@ -304,9 +347,9 @@ export function Teleprompter({ script, settings, onExit }: Props) {
         className={`${styles.toolbar} ${controlsVisible ? styles.toolbarVisible : ''}`}
       >
         <VoiceStatus status={voiceStatus} />
-        {mode === 'voice' && listening && (
+        {mode === 'voice' && (
           <p className={styles.heardHint}>
-            {en.voiceFollowHint}
+            {listening ? en.voiceFollowHint : en.tapToListenHint}
             {lastHeard ? ` Heard: “${lastHeard.trim()}”` : ''}
           </p>
         )}
@@ -340,9 +383,6 @@ export function Teleprompter({ script, settings, onExit }: Props) {
 
           <button type="button" onClick={restart}>
             {en.restart}
-          </button>
-          <button type="button" onClick={onExit}>
-            {en.backToEditor}
           </button>
         </div>
 
@@ -395,6 +435,16 @@ export function Teleprompter({ script, settings, onExit }: Props) {
           <p className={styles.hint}>{en.micDeniedHint}</p>
         )}
         {speechHint && <p className={styles.hint}>{speechHint}</p>}
+      </div>
+
+      <div className={styles.stopBar}>
+        <button
+          type="button"
+          className={styles.stopTeleprompterBtn}
+          onClick={stopTeleprompter}
+        >
+          {en.stopTeleprompter}
+        </button>
       </div>
     </div>
   );
