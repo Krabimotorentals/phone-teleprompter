@@ -1,0 +1,191 @@
+.root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+
+.readingGuide {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 38%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.25) 20%,
+    rgba(255, 255, 255, 0.25) 80%,
+    transparent
+  );
+  z-index: 2;
+}
+
+.scrollContainer {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.padTop {
+  min-height: 35vh;
+}
+
+.padBottom {
+  min-height: 50vh;
+}
+
+.scriptStage {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-height: 50vh;
+}
+
+.scriptColumn {
+  margin: 0 auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 0 1rem;
+  transform-origin: center center;
+}
+
+.scriptSideways {
+  max-width: none;
+  width: max-content;
+  max-height: 85vw;
+}
+
+.scriptUpsideDown {
+  padding: 2rem 1rem;
+}
+
+.scrollSideways {
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.padTopSideways {
+  min-height: 15vh;
+}
+
+.padBottomSideways {
+  min-height: 25vh;
+}
+
+.word {
+  opacity: 0.75;
+}
+
+.wordCurrent {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.empty {
+  margin: 0;
+  opacity: 0.8;
+}
+
+.toolbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.75rem max(0.75rem, env(safe-area-inset-right))
+    max(0.75rem, env(safe-area-inset-bottom))
+    max(0.75rem, env(safe-area-inset-left));
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transform: translateY(100%);
+  opacity: 0;
+  transition:
+    transform 0.25s ease,
+    opacity 0.25s ease;
+  z-index: 5;
+}
+
+.toolbarVisible {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.toolbarRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.toolbarRow button {
+  flex: 1;
+  min-width: 4.5rem;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(30, 30, 30, 0.9);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.75rem;
+  opacity: 0.85;
+  line-height: 1.35;
+}
+
+.heardHint {
+  margin: 0;
+  font-size: 0.72rem;
+  opacity: 0.8;
+  line-height: 1.35;
+}
+
+.listenOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.82);
+  text-align: center;
+}
+
+.listenOverlayBtn {
+  min-height: 56px;
+  min-width: min(100%, 320px);
+  padding: 0.85rem 1.25rem;
+  border: none;
+  border-radius: 14px;
+  background: var(--accent, #2563eb);
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.listenOverlayHint {
+  margin: 0;
+  max-width: 22rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  opacity: 0.9;
+}

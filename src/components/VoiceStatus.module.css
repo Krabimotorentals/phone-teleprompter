@@ -1,0 +1,42 @@
+.wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  opacity: 0.85;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #888;
+}
+
+.wrap[data-status='listening'] .dot {
+  background: #4ade80;
+  box-shadow: 0 0 6px #4ade80;
+}
+
+.wrap[data-status='paused'] .dot {
+  background: #fbbf24;
+}
+
+.wrap[data-status='finding-position'] .dot {
+  background: #60a5fa;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.wrap[data-status='mic-unavailable'] .dot,
+.wrap[data-status='speech-unavailable'] .dot {
+  background: #f87171;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
